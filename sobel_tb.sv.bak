@@ -1,0 +1,218 @@
+//=====================================================
+// Sobel Edge Detection Testbench (Fixed Auto-Finish)
+//=====================================================
+module sobel_tb;
+    parameter IMG_WIDTH  = 8;
+    parameter IMG_HEIGHT = 8;
+    parameter CLK_PERIOD = 10;
+    
+    logic clk;
+    logic rst_n;
+    logic start;
+    logic [7:0] pixel_in;
+    logic pixel_valid;
+    logic [7:0] pixel_out;
+    logic pixel_out_valid;
+    logic done;
+    
+    //=====================================================
+    // Test Image
+    //=====================================================
+    logic [7:0] test_image [0:IMG_HEIGHT-1][0:IMG_WIDTH-1] = '{
+        '{  10,  20,  30,  40,  50,  60,  70,  80},
+        '{  15,  25,  35,  45,  55,  65,  75,  85},
+        '{  20,  30, 200, 220, 240, 100,  80,  90},
+        '{  25,  35, 210, 230, 250, 110,  90, 100},
+        '{  30,  40, 220, 240, 255, 120, 100, 110},
+        '{  35,  45,  90, 100, 110, 130, 140, 150},
+        '{  40,  50,  95, 105, 115, 135, 145, 155},
+        '{  45,  55, 100, 110, 120, 140, 150, 160}
+    };
+    
+    logic [7:0] output_image [0:IMG_HEIGHT-3][0:IMG_WIDTH-3];
+    
+    //=====================================================
+    // DUT Instantiation
+    //=====================================================
+    sobel_edge_detector #(
+        .IMG_WIDTH(IMG_WIDTH),
+        .IMG_HEIGHT(IMG_HEIGHT)
+    ) dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .start(start),
+        .pixel_in(pixel_in),
+        .pixel_valid(pixel_valid),
+        .pixel_out(pixel_out),
+        .pixel_out_valid(pixel_out_valid),
+        .done(done)
+    );
+    
+    //=====================================================
+    // Clock generation
+    //=====================================================
+    initial begin
+        clk = 0;
+        forever #(CLK_PERIOD/2) clk = ~clk;
+    end
+    
+    //=====================================================
+    // Output capture
+    //=====================================================
+    int out_row = 0, out_col = 0;
+    int processed_count = 0;
+    int total_pixels = (IMG_WIDTH - 2) * (IMG_HEIGHT - 2);
+    logic output_complete = 0;
+    
+    always_ff @(posedge clk) begin
+        if (pixel_out_valid) begin
+            output_image[out_row][out_col] <= pixel_out;
+            processed_count++;
+            
+            $display("[%0t] pixel_out[%0d][%0d] = %0d", 
+                     $time, out_row, out_col, pixel_out);
+            
+            out_col++;
+            if (out_col >= IMG_WIDTH - 2) begin
+                out_col = 0;
+                out_row++;
+            end
+            
+            // Check if all outputs captured
+            if (processed_count == total_pixels) begin
+                output_complete <= 1;  
+                $display("\n? All %0d output pixels captured!", total_pixels);
+            end
+        end
+    end
+    
+    //=====================================================
+    // Test sequence
+    //=====================================================
+    initial begin
+        $display("Starting Sobel Edge Detection Simulation...");
+        $display("Expected output pixels: %0d\n", total_pixels);
+        
+        // Initialize
+        rst_n = 0;
+        start = 0;
+        pixel_in = 0;
+        pixel_valid = 0;
+        output_complete = 0;
+        
+        // Reset
+        repeat(5) @(posedge clk);
+        rst_n = 1;
+        repeat(2) @(posedge clk);
+        
+        // Start processing
+        start = 1;
+        pixel_valid = 1;
+        
+        // Feed image pixels
+        for (int i = 0; i < IMG_HEIGHT; i++) begin
+            for (int j = 0; j < IMG_WIDTH; j++) begin
+                pixel_in = test_image[i][j];
+                @(posedge clk);
+            end
+        end
+        
+        pixel_valid = 0;
+        start = 0;
+        
+        // Wait for all outputs to be captured
+        wait(output_complete);
+        
+        // Give a few more cycles for any pending outputs
+        repeat(3) @(posedge clk);
+        
+        // Display results
+        show_results();
+        
+        // Finish simulation cleanly
+        $display("\n? Simulation completed successfully!");
+        #10;
+        $finish;
+    end
+    
+    //=====================================================
+    // Display results (task)
+    //=====================================================
+    task show_results;
+	 // Edge statistics
+        int max_edge;
+        int min_edge;
+        real avg_edge;
+        int edge_count;
+
+        $display("\n=== Input Image (Values) ===");
+        for (int i = 0; i < IMG_HEIGHT; i++) begin
+            for (int j = 0; j < IMG_WIDTH; j++) begin
+                $write("%3d ", test_image[i][j]);
+	    end
+            $display("");
+        end
+
+        $display("\n=== Input Image (Visualized) ===");
+        for (int i = 0; i < IMG_HEIGHT; i++) begin
+            for (int j = 0; j < IMG_WIDTH; j++) begin
+                $write("%s", test_image[i][j] > 128 ? "?" : " ");
+	    end
+            $display("");
+        end
+
+        $display("\n=== Output Image (Edge Values) ===");
+        for (int i = 0; i < IMG_HEIGHT - 2; i++) begin
+            for (int j = 0; j < IMG_WIDTH - 2; j++) begin
+                $write("%3d ", output_image[i][j]);
+	    end
+            $display("");
+        end
+
+        $display("\n=== Output Image (Visualized) ===");
+        for (int i = 0; i < IMG_HEIGHT - 2; i++) begin
+            for (int j = 0; j < IMG_WIDTH - 2; j++) begin
+                $write("%s", output_image[i][j] > 128 ? "?" : " ");
+	    end
+            $display("");
+        end
+        
+        
+        for (int i = 0; i < IMG_HEIGHT - 2; i++) begin
+            for (int j = 0; j < IMG_WIDTH - 2; j++) begin
+                if (output_image[i][j] > max_edge) max_edge = output_image[i][j];
+                if (output_image[i][j] < min_edge) min_edge = output_image[i][j];
+                	avg_edge += output_image[i][j];
+                if (output_image[i][j] > 128) edge_count++;
+            end
+        end
+        avg_edge = avg_edge / real'(total_pixels);  // 
+        
+        $display("\n=== Edge Statistics ===");
+        $display("Total pixels: %0d", total_pixels);
+        $display("Strong edges (>128): %0d (%.1f%%)", edge_count, 100.0 * edge_count / total_pixels);
+        $display("Min edge value: %0d", min_edge);
+        $display("Max edge value: %0d", max_edge);
+        $display("Avg edge value: %.2f", avg_edge);
+    endtask
+    
+    //=====================================================
+    // Safety timeout
+    //=====================================================
+    initial begin
+        #100000;
+        $display("\n? ERROR: Simulation timeout after 100us!");
+        $display("Output pixels captured: %0d / %0d", processed_count, total_pixels);
+        $finish;
+    end
+    
+    //=====================================================
+    // Waveform dump
+    //=====================================================
+    initial begin
+        $dumpfile("sobel_tb.vcd");
+        $dumpvars(0, sobel_tb);
+    end
+
+endmodule
+
