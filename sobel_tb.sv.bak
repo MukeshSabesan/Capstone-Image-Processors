@@ -2,8 +2,8 @@
 // Sobel Edge Detection Testbench (Fixed Auto-Finish)
 //=====================================================
 module sobel_tb;
-    parameter IMG_WIDTH  = 8;
-    parameter IMG_HEIGHT = 8;
+    parameter IMG_WIDTH  = 422;
+    parameter IMG_HEIGHT = 413;
     parameter CLK_PERIOD = 10;
     
     logic clk;
@@ -15,21 +15,139 @@ module sobel_tb;
     logic pixel_out_valid;
     logic done;
     
-    //=====================================================
-    // Test Image
-    //=====================================================
-    logic [7:0] test_image [0:IMG_HEIGHT-1][0:IMG_WIDTH-1] = '{
-        '{  10,  20,  30,  40,  50,  60,  70,  80},
-        '{  15,  25,  35,  45,  55,  65,  75,  85},
-        '{  20,  30, 200, 220, 240, 100,  80,  90},
-        '{  25,  35, 210, 230, 250, 110,  90, 100},
-        '{  30,  40, 220, 240, 255, 120, 100, 110},
-        '{  35,  45,  90, 100, 110, 130, 140, 150},
-        '{  40,  50,  95, 105, 115, 135, 145, 155},
-        '{  45,  55, 100, 110, 120, 140, 150, 160}
-    };
+    // Test image (8x8 gradient + pattern)
+   logic [7:0] test_image [0:IMG_HEIGHT-1][0:IMG_WIDTH-1]; 
     
-    logic [7:0] output_image [0:IMG_HEIGHT-3][0:IMG_WIDTH-3];
+   logic [7:0] output_image [0:IMG_HEIGHT-3][0:IMG_WIDTH-3];
+    
+    //=====================================================
+    // Task: Load image from text file
+    //=====================================================
+    task load_image_from_file(input string filename);
+        int file_handle;
+        int scan_result;
+        int pixel_value;
+        int file_width, file_height;
+        int i, j;
+        
+        file_handle = $fopen(filename, "r");
+        
+        
+        $display("?? Loading image from: %s", filename);
+        
+        // Read dimensions from header
+        scan_result = $fscanf(file_handle, "%d %d", file_height, file_width);
+        if (scan_result != 2) begin
+            $display("ERROR: Cannot read image dimensions");
+            $fclose(file_handle);
+            return;
+        end
+        
+        $display("   File dimensions: %0dx%0d", file_height, file_width);
+        
+        // Check dimensions match
+        if (file_height != IMG_HEIGHT || file_width != IMG_WIDTH) begin
+            $display("ERROR: Image size mismatch!");
+            $display("Expected: %0dx%0d, Got: %0dx%0d", 
+                     IMG_HEIGHT, IMG_WIDTH, file_height, file_width);
+            $display("   Update IMG_WIDTH and IMG_HEIGHT parameters!");
+            $fclose(file_handle);
+            $finish;
+        end
+        
+        // Read pixel data into test_image array
+        for (i = 0; i < IMG_HEIGHT; i++) begin
+            for (j = 0; j < IMG_WIDTH; j++) begin
+                scan_result = $fscanf(file_handle, "%d", pixel_value);
+                if (scan_result != 1) begin
+                    $display("ERROR: Failed to read pixel at (%0d,%0d)", i, j);
+                    $fclose(file_handle);
+                    $finish;
+                end
+                test_image[i][j] = pixel_value[7:0];  // ? This updates test_image!
+            end
+        end
+        
+        $fclose(file_handle);
+        $display("Image loaded into test_image array: %0dx%0d pixels", IMG_HEIGHT, IMG_WIDTH);
+        
+        // Show some sample pixels to verify
+        $display("   Sample pixels (first 8):");
+        $write("   ");
+        for (j = 0; j < 8 && j < IMG_WIDTH; j++)
+            $write("%3d ", test_image[0][j]);
+        $display("\n");
+    endtask
+    
+    //=====================================================
+    // Task: Save output image to text file
+    //=====================================================
+    /*task save_output_to_file(input string filename);
+        int file_handle;
+        int i, j;
+        int out_h, out_w;
+        
+        out_h = IMG_HEIGHT - 2;
+        out_w = IMG_WIDTH - 2;
+        
+        file_handle = $fopen(filename, "w");
+        if (file_handle == 0) begin
+            $display("? ERROR: Cannot create file '%s'", filename);
+            return;
+        end
+        
+        $display("?? Saving edge-detected image to: %s", filename);
+        
+        // Write dimensions
+        $fwrite(file_handle, "%0d %0d\n", out_h, out_w);
+        
+        // Write pixel values
+        for (i = 0; i < out_h; i++) begin
+            for (j = 0; j < out_w; j++) begin
+                $fwrite(file_handle, "%0d", output_image[i][j]);
+                if (j < out_w - 1)
+                    $fwrite(file_handle, " ");
+            end
+            $fwrite(file_handle, "\n");
+        end
+        
+        $fclose(file_handle);
+        $display("? Output saved: %0dx%0d pixels\n", out_h, out_w);
+    endtask */
+
+    task save_output_to_file(input string filename);
+       int file_handle;
+       int i, j;
+       int out_h, out_w;
+    
+       out_h = IMG_HEIGHT - 2;
+       out_w = IMG_WIDTH - 2;
+    
+       file_handle = $fopen(filename, "w");
+       if (file_handle == 0) begin
+           $display("ERROR: Cannot create file '%s'", filename);
+           return;
+       end
+    
+    // Write dimensions header
+       $fwrite(file_handle, "%0d %0d\n", out_h, out_w);
+    
+    // Write pixel values
+       for (i = 0; i < out_h; i++) begin
+           for (j = 0; j < out_w; j++) begin
+             if (j > 0)
+                $fwrite(file_handle, " ");  // Space BEFORE (except first)
+                $fwrite(file_handle, "%0d", output_image[i][j]);
+          end
+        $fwrite(file_handle, "\n");  // Newline after each row
+       end
+    
+    // IMPORTANT: Close file BEFORE any display
+    $fclose(file_handle);
+    
+    // Now display to console (won't affect file)
+    $display("Output saved: %0d x %0d pixels", out_h, out_w);
+    endtask
     
     //=====================================================
     // DUT Instantiation
@@ -79,12 +197,23 @@ module sobel_tb;
             end
             
             // Check if all outputs captured
-            if (processed_count == total_pixels) begin
-                output_complete <= 1;  
+            if (processed_count >= total_pixels - 1) begin
+                output_complete = 1;
                 $display("\n? All %0d output pixels captured!", total_pixels);
             end
         end
     end
+
+    //=====================================================
+    // Detect when DUT finishes
+    //=====================================================
+    always_ff @(posedge clk) begin
+      if (done && !output_complete) begin
+        output_complete = 1;
+        $display("\n? DUT signaled done at time %0t", $time);
+      end
+    end
+
     
     //=====================================================
     // Test sequence
@@ -92,13 +221,15 @@ module sobel_tb;
     initial begin
         $display("Starting Sobel Edge Detection Simulation...");
         $display("Expected output pixels: %0d\n", total_pixels);
+
+	load_image_from_file("flower_input.txt");
+    	$display("Image loaded successfully.\n");
         
         // Initialize
         rst_n = 0;
         start = 0;
         pixel_in = 0;
         pixel_valid = 0;
-        output_complete = 0;
         
         // Reset
         repeat(5) @(posedge clk);
@@ -124,14 +255,16 @@ module sobel_tb;
         wait(output_complete);
         
         // Give a few more cycles for any pending outputs
-        repeat(3) @(posedge clk);
+        repeat(5) @(posedge clk);
         
         // Display results
         show_results();
         
-        // Finish simulation cleanly
+        // Finish simulation
         $display("\n? Simulation completed successfully!");
-        #10;
+	// Save the processed output to a file
+    	save_output_to_file("sobel_output.txt");
+
         $finish;
     end
     
@@ -139,7 +272,7 @@ module sobel_tb;
     // Display results (task)
     //=====================================================
     task show_results;
-	 // Edge statistics
+	// Statistics
         int max_edge;
         int min_edge;
         real avg_edge;
@@ -147,9 +280,8 @@ module sobel_tb;
 
         $display("\n=== Input Image (Values) ===");
         for (int i = 0; i < IMG_HEIGHT; i++) begin
-            for (int j = 0; j < IMG_WIDTH; j++) begin
+            for (int j = 0; j < IMG_WIDTH; j++)
                 $write("%3d ", test_image[i][j]);
-	    end
             $display("");
         end
 
@@ -164,6 +296,7 @@ module sobel_tb;
         $display("\n=== Output Image (Edge Values) ===");
         for (int i = 0; i < IMG_HEIGHT - 2; i++) begin
             for (int j = 0; j < IMG_WIDTH - 2; j++) begin
+		if (output_image[i][j] == 'x') output_image[i][j] = 0;
                 $write("%3d ", output_image[i][j]);
 	    end
             $display("");
@@ -182,32 +315,27 @@ module sobel_tb;
             for (int j = 0; j < IMG_WIDTH - 2; j++) begin
                 if (output_image[i][j] > max_edge) max_edge = output_image[i][j];
                 if (output_image[i][j] < min_edge) min_edge = output_image[i][j];
-                	avg_edge += output_image[i][j];
+                avg_edge += output_image[i][j];
                 if (output_image[i][j] > 128) edge_count++;
             end
         end
-        avg_edge = avg_edge / real'(total_pixels);  // 
-        
+        avg_edge /= ((IMG_HEIGHT-2) * (IMG_WIDTH-2));
+	
+	
+
         $display("\n=== Edge Statistics ===");
         $display("Total pixels: %0d", total_pixels);
-        $display("Strong edges (>128): %0d (%.1f%%)", edge_count, 100.0 * edge_count / total_pixels);
+        $display("Strong edges (>128): %0d (%.1f%%)", edge_count, 100.0*edge_count/total_pixels);
         $display("Min edge value: %0d", min_edge);
         $display("Max edge value: %0d", max_edge);
         $display("Avg edge value: %.2f", avg_edge);
+
+	if (processed_count >= total_pixels) output_complete = 1;
     endtask
     
     //=====================================================
     // Safety timeout
     //=====================================================
-    initial begin
-        #100000;
-        $display("\n? ERROR: Simulation timeout after 100us!");
-        $display("Output pixels captured: %0d / %0d", processed_count, total_pixels);
-        $finish;
-    end
-    
-    //=====================================================
-    // Waveform dump
     //=====================================================
     initial begin
         $dumpfile("sobel_tb.vcd");
@@ -215,4 +343,3 @@ module sobel_tb;
     end
 
 endmodule
-

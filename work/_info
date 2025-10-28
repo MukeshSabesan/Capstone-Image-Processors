@@ -1,0 +1,58 @@
+m255
+K4
+z2
+13
+!s112 1.1
+!i10d 8192
+!i10e 25
+!i10f 100
+cModel Technology
+Z0 dC:/intelFPGA/18.1/Image Processors
+vsobel_edge_detector
+Z1 DXx6 sv_std 3 std 0 22 AD7iAPLo6nTIKk<N0eo=D3
+!s110 1761673891
+!i10b 1
+!s100 6KLH>6RHACa?AW9<05D6R2
+IPgIeS66aT<7z5eIX[9aKL1
+Z2 VDg1SIo80bB@j0V0VzS_@n1
+!s105 sobel_edge_detector_sv_unit
+S1
+R0
+w1761568930
+8sobel_edge_detector.sv
+Fsobel_edge_detector.sv
+L0 3
+Z3 OV;L;10.5b;63
+r1
+!s85 0
+31
+!s108 1761673891.000000
+!s107 sobel_tb.sv|sobel_edge_detector.sv|
+!s90 -reportprogress|300|-sv|sobel_edge_detector.sv|sobel_tb.sv|
+!i113 1
+o-sv
+Z4 tCvgOpt 0
+vsobel_tb
+R1
+!s110 1761683363
+!i10b 1
+!s100 VU8z^Z@C]`DQ[dlEzhW6B1
+IgQiVdO9@ZlP]_ZbOjL;083
+R2
+!s105 sobel_tb_sv_unit
+S1
+R0
+w1761683357
+8sobel_tb.sv
+Fsobel_tb.sv
+L0 4
+R3
+r1
+!s85 0
+31
+!s108 1761683363.000000
+!s107 sobel_tb.sv|
+!s90 -reportprogress|300|-sv|sobel_tb.sv|
+!i113 1
+o-sv
+R4
